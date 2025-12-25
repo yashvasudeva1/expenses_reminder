@@ -112,12 +112,12 @@ app.post('/api/test-email', async (req, res) => {
 
 // Check email config status (for debugging)
 app.get('/api/email-status', async (req, res) => {
-  const hasResendKey = !!process.env.RESEND_API_KEY;
+  const hasBrevoKey = !!process.env.BREVO_API_KEY;
   res.json({
-    configured: hasResendKey,
-    provider: 'Resend',
-    apiKey: hasResendKey ? 'SET (hidden)' : 'NOT SET',
-    fromAddress: process.env.EMAIL_FROM_ADDRESS || 'onboarding@resend.dev'
+    configured: hasBrevoKey,
+    provider: 'Brevo',
+    apiKey: hasBrevoKey ? 'SET (hidden)' : 'NOT SET',
+    fromAddress: process.env.EMAIL_FROM_ADDRESS || 'vasudevyash@gmail.com'
   });
 });
 
