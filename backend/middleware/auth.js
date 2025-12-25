@@ -4,12 +4,12 @@
  */
 
 const jwt = require('jsonwebtoken');
-const { get } = require('../config/database');
+const { queryOne } = require('../config/database');
 
 /**
  * Middleware to protect routes - requires valid JWT token
  */
-const authenticate = (req, res, next) => {
+const authenticate = async (req, res, next) => {
   try {
     // Get token from header
     const authHeader = req.headers.authorization;
@@ -28,7 +28,7 @@ const authenticate = (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     // Get user from database
-    const user = get('SELECT id, name, email FROM users WHERE id = ?', [decoded.userId]);
+    const user = await queryOne('SELECT id, name, email FROM users WHERE id = $1', [decoded.userId]);
 
     if (!user) {
       return res.status(401).json({
