@@ -7,9 +7,10 @@ const initSqlJs = require('sql.js');
 const fs = require('fs');
 const path = require('path');
 
-// Database file path - use persistent disk on Render, local folder in development
+// Database file path - use /tmp on Render (writable), local folder in development
+// Note: /tmp is not persistent on Render free tier - data resets on restart
 const dbDir = process.env.NODE_ENV === 'production' 
-  ? '/var/data' 
+  ? '/tmp' 
   : path.join(__dirname, '..');
 const dbPath = path.join(dbDir, 'expense_reminder.db');
 
@@ -21,11 +22,6 @@ let db = null;
 async function initializeDatabase() {
   try {
     const SQL = await initSqlJs();
-    
-    // Ensure directory exists
-    if (!fs.existsSync(dbDir)) {
-      fs.mkdirSync(dbDir, { recursive: true });
-    }
     
     // Load existing database or create new one
     if (fs.existsSync(dbPath)) {
