@@ -110,6 +110,35 @@ app.post('/api/test-email', async (req, res) => {
   });
 });
 
+// Manual trigger for reminders (useful for testing)
+app.post('/api/trigger-reminders', async (req, res) => {
+  try {
+    const { processReminders } = require('./scheduler/reminderScheduler');
+    await processReminders();
+    res.json({ success: true, message: 'Reminder check completed. Check server logs.' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Check pending reminders (for debugging)
+app.get('/api/pending-reminders', async (req, res) => {
+  try {
+    const { query } = require('./config/database');
+    const today = new Date().toISOString().split('T')[0];
+    const pending = await query(`
+      SELECT e.id, e.expense_name, e.reminder_date, e.due_date, e.email_sent, e.paid, u.email
+      FROM expenses e
+      JOIN users u ON e.user_id = u.id
+      WHERE e.reminder_date <= $1 AND e.email_sent = 0 AND (e.paid = 0 OR e.paid IS NULL)
+      ORDER BY e.reminder_date
+    `, [today]);
+    res.json({ success: true, today, count: pending.length, reminders: pending });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // Auth routes with stricter rate limiting
 app.use('/api/auth', authLimiter, authRoutes);
 

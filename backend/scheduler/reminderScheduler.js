@@ -17,7 +17,7 @@ async function processReminders() {
   console.log(`\n🔍 Checking for reminders (${today})...`);
 
   try {
-    // Get all pending reminders with user info
+    // Get all pending reminders with user info (exclude paid expenses)
     const pendingReminders = await query(`
       SELECT 
         e.id,
@@ -32,7 +32,7 @@ async function processReminders() {
         u.email as user_email
       FROM expenses e
       JOIN users u ON e.user_id = u.id
-      WHERE e.reminder_date <= $1 AND e.email_sent = 0
+      WHERE e.reminder_date <= $1 AND e.email_sent = 0 AND (e.paid = 0 OR e.paid IS NULL)
       ORDER BY e.due_date ASC
     `, [today]);
 

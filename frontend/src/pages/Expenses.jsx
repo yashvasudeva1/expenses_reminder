@@ -11,7 +11,6 @@ import ConfirmModal from '../components/ConfirmModal'
 import LoadingSpinner from '../components/LoadingSpinner'
 import toast from 'react-hot-toast'
 import {
-  Search,
   Filter,
   PlusCircle,
   Receipt,
@@ -182,13 +181,12 @@ export default function Expenses() {
         <div className="flex flex-col sm:flex-row gap-4">
           {/* Search */}
           <div className="relative flex-1">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search expenses..."
-              className="input pl-12"
+              className="input"
             />
           </div>
 
