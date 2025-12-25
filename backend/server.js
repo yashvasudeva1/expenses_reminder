@@ -23,6 +23,10 @@ const expenseRoutes = require('./routes/expenses');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Trust proxy - Required for Render and other reverse proxies
+// This allows express-rate-limit to correctly identify users
+app.set('trust proxy', 1);
+
 // ===========================================
 // Security Middleware
 // ===========================================
