@@ -143,12 +143,18 @@ app.post('/api/test-send', async (req, res) => {
   }
 });
 
-// Manual trigger for reminders (useful for testing)
+// Manual trigger for reminders (secured with CRON_SECRET)
 app.post('/api/trigger-reminders', async (req, res) => {
+  // Verify cron secret from header or query param
+  const secret = req.headers['x-cron-secret'] || req.query.secret;
+  if (process.env.CRON_SECRET && secret !== process.env.CRON_SECRET) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+  
   try {
     const { processReminders } = require('./scheduler/reminderScheduler');
     await processReminders();
-    res.json({ success: true, message: 'Reminder check completed. Check server logs.' });
+    res.json({ success: true, message: 'Reminder check completed.' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
