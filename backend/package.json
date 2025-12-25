@@ -21,7 +21,8 @@
     "jsonwebtoken": "^9.0.2",
     "node-cron": "^3.0.3",
     "nodemailer": "^6.9.13",
-    "pg": "^8.16.3"
+    "pg": "^8.16.3",
+    "resend": "^6.6.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.0"
