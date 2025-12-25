@@ -4,8 +4,8 @@
  */
 
 const express = require('express');
-const { body, param, query, validationResult } = require('express-validator');
-const { all, get, run } = require('../config/database');
+const { body, param, query: queryValidator, validationResult } = require('express-validator');
+const { query, queryOne, execute } = require('../config/database');
 const { authenticate } = require('../middleware/auth');
 
 const router = express.Router();
@@ -22,11 +22,11 @@ const CATEGORIES = ['Bills', 'Food', 'Transport', 'Shopping', 'Entertainment', '
  * @access  Private
  */
 router.get('/', [
-  query('category').optional().isIn(CATEGORIES).withMessage('Invalid category'),
-  query('startDate').optional().isISO8601().withMessage('Invalid start date'),
-  query('endDate').optional().isISO8601().withMessage('Invalid end date'),
-  query('recurring').optional().isIn(['yes', 'no']).withMessage('Invalid recurring value')
-], (req, res) => {
+  queryValidator('category').optional().isIn(CATEGORIES).withMessage('Invalid category'),
+  queryValidator('startDate').optional().isISO8601().withMessage('Invalid start date'),
+  queryValidator('endDate').optional().isISO8601().withMessage('Invalid end date'),
+  queryValidator('recurring').optional().isIn(['yes', 'no']).withMessage('Invalid recurring value')
+], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -37,33 +37,34 @@ router.get('/', [
       });
     }
 
-    let query = 'SELECT * FROM expenses WHERE user_id = ?';
+    let sqlQuery = 'SELECT * FROM expenses WHERE user_id = $1';
     const params = [req.user.id];
+    let paramIndex = 2;
 
     // Apply filters
     if (req.query.category) {
-      query += ' AND category = ?';
+      sqlQuery += ` AND category = $${paramIndex++}`;
       params.push(req.query.category);
     }
 
     if (req.query.startDate) {
-      query += ' AND due_date >= ?';
+      sqlQuery += ` AND due_date >= $${paramIndex++}`;
       params.push(req.query.startDate);
     }
 
     if (req.query.endDate) {
-      query += ' AND due_date <= ?';
+      sqlQuery += ` AND due_date <= $${paramIndex++}`;
       params.push(req.query.endDate);
     }
 
     if (req.query.recurring) {
-      query += ' AND recurring = ?';
+      sqlQuery += ` AND recurring = $${paramIndex++}`;
       params.push(req.query.recurring);
     }
 
-    query += ' ORDER BY due_date ASC';
+    sqlQuery += ' ORDER BY due_date ASC';
 
-    const expenses = all(query, params);
+    const expenses = await query(sqlQuery, params);
 
     res.json({
       success: true,
@@ -98,7 +99,7 @@ router.get('/categories', (req, res) => {
  * @desc    Get monthly expense summary
  * @access  Private
  */
-router.get('/summary/monthly', (req, res) => {
+router.get('/summary/monthly', async (req, res) => {
   try {
     const year = req.query.year || new Date().getFullYear();
     const month = req.query.month || new Date().getMonth() + 1;
@@ -108,14 +109,14 @@ router.get('/summary/monthly', (req, res) => {
     const endDate = new Date(year, month, 0).toISOString().split('T')[0];
 
     // Total expenses for the month
-    const totalResult = get(
-      'SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE user_id = ? AND due_date BETWEEN ? AND ?',
+    const totalResult = await queryOne(
+      'SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE user_id = $1 AND due_date BETWEEN $2 AND $3',
       [req.user.id, startDate, endDate]
     );
 
     // Expenses by category
-    const byCategory = all(
-      'SELECT category, SUM(amount) as total, COUNT(*) as count FROM expenses WHERE user_id = ? AND due_date BETWEEN ? AND ? GROUP BY category ORDER BY total DESC',
+    const byCategory = await query(
+      'SELECT category, SUM(amount) as total, COUNT(*) as count FROM expenses WHERE user_id = $1 AND due_date BETWEEN $2 AND $3 GROUP BY category ORDER BY total DESC',
       [req.user.id, startDate, endDate]
     );
 
@@ -123,14 +124,14 @@ router.get('/summary/monthly', (req, res) => {
     const today = new Date().toISOString().split('T')[0];
     const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     
-    const upcoming = all(
-      'SELECT * FROM expenses WHERE user_id = ? AND due_date BETWEEN ? AND ? ORDER BY due_date ASC LIMIT 5',
+    const upcoming = await query(
+      'SELECT * FROM expenses WHERE user_id = $1 AND due_date BETWEEN $2 AND $3 ORDER BY due_date ASC LIMIT 5',
       [req.user.id, today, nextWeek]
     );
 
     // Count of all expenses
-    const countResult = get(
-      'SELECT COUNT(*) as count FROM expenses WHERE user_id = ?',
+    const countResult = await queryOne(
+      'SELECT COUNT(*) as count FROM expenses WHERE user_id = $1',
       [req.user.id]
     );
 
@@ -160,7 +161,7 @@ router.get('/summary/monthly', (req, res) => {
  */
 router.get('/:id', [
   param('id').isInt().withMessage('Invalid expense ID')
-], (req, res) => {
+], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -171,9 +172,10 @@ router.get('/:id', [
       });
     }
 
-    const expense = db.prepare(`
-      SELECT * FROM expenses WHERE id = ? AND user_id = ?
-    `).get(req.params.id, req.user.id);
+    const expense = await queryOne(
+      'SELECT * FROM expenses WHERE id = $1 AND user_id = $2',
+      [req.params.id, req.user.id]
+    );
 
     if (!expense) {
       return res.status(404).json({
@@ -220,7 +222,7 @@ router.post('/', [
   body('recurring')
     .optional()
     .isIn(['yes', 'no']).withMessage('Recurring must be yes or no')
-], (req, res) => {
+], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -241,12 +243,10 @@ router.post('/', [
       });
     }
 
-    const result = run(
-      'INSERT INTO expenses (user_id, expense_name, amount, category, due_date, reminder_date, recurring) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    const expense = await queryOne(
+      'INSERT INTO expenses (user_id, expense_name, amount, category, due_date, reminder_date, recurring) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
       [req.user.id, expense_name, amount, category || 'Other', due_date, reminder_date, recurring || 'no']
     );
-
-    const expense = get('SELECT * FROM expenses WHERE id = ?', [result.lastInsertRowid]);
 
     res.status(201).json({
       success: true,
@@ -288,7 +288,7 @@ router.put('/:id', [
   body('recurring')
     .optional()
     .isIn(['yes', 'no']).withMessage('Recurring must be yes or no')
-], (req, res) => {
+], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -300,8 +300,8 @@ router.put('/:id', [
     }
 
     // Check if expense exists and belongs to user
-    const existingExpense = get(
-      'SELECT * FROM expenses WHERE id = ? AND user_id = ?',
+    const existingExpense = await queryOne(
+      'SELECT * FROM expenses WHERE id = $1 AND user_id = $2',
       [req.params.id, req.user.id]
     );
 
@@ -317,31 +317,33 @@ router.put('/:id', [
     // Build update query dynamically
     const updates = [];
     const params = [];
+    let paramIndex = 1;
 
     if (expense_name !== undefined) {
-      updates.push('expense_name = ?');
+      updates.push(`expense_name = $${paramIndex++}`);
       params.push(expense_name);
     }
     if (amount !== undefined) {
-      updates.push('amount = ?');
+      updates.push(`amount = $${paramIndex++}`);
       params.push(amount);
     }
     if (category !== undefined) {
-      updates.push('category = ?');
+      updates.push(`category = $${paramIndex++}`);
       params.push(category);
     }
     if (due_date !== undefined) {
-      updates.push('due_date = ?');
+      updates.push(`due_date = $${paramIndex++}`);
       params.push(due_date);
     }
     if (reminder_date !== undefined) {
-      updates.push('reminder_date = ?');
+      updates.push(`reminder_date = $${paramIndex++}`);
       params.push(reminder_date);
       // Reset email_sent when reminder_date changes
-      updates.push('email_sent = 0');
+      updates.push(`email_sent = $${paramIndex++}`);
+      params.push(0);
     }
     if (recurring !== undefined) {
-      updates.push('recurring = ?');
+      updates.push(`recurring = $${paramIndex++}`);
       params.push(recurring);
     }
 
@@ -354,12 +356,10 @@ router.put('/:id', [
 
     params.push(req.params.id, req.user.id);
 
-    run(
-      `UPDATE expenses SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`,
+    const updatedExpense = await queryOne(
+      `UPDATE expenses SET ${updates.join(', ')} WHERE id = $${paramIndex++} AND user_id = $${paramIndex} RETURNING *`,
       params
     );
-
-    const updatedExpense = get('SELECT * FROM expenses WHERE id = ?', [req.params.id]);
 
     res.json({
       success: true,
@@ -382,7 +382,7 @@ router.put('/:id', [
  */
 router.delete('/:id', [
   param('id').isInt().withMessage('Invalid expense ID')
-], (req, res) => {
+], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -394,8 +394,8 @@ router.delete('/:id', [
     }
 
     // Check if expense exists and belongs to user
-    const expense = get(
-      'SELECT * FROM expenses WHERE id = ? AND user_id = ?',
+    const expense = await queryOne(
+      'SELECT * FROM expenses WHERE id = $1 AND user_id = $2',
       [req.params.id, req.user.id]
     );
 
@@ -406,7 +406,7 @@ router.delete('/:id', [
       });
     }
 
-    run('DELETE FROM expenses WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
+    await execute('DELETE FROM expenses WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
 
     res.json({
       success: true,

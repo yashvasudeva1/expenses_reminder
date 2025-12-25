@@ -4,7 +4,7 @@
  */
 
 const cron = require('node-cron');
-const { all, get, run } = require('../config/database');
+const { query, queryOne, execute } = require('../config/database');
 const { sendReminderEmail } = require('../services/emailService');
 
 /**
@@ -18,7 +18,7 @@ async function processReminders() {
 
   try {
     // Get all pending reminders with user info
-    const pendingReminders = all(`
+    const pendingReminders = await query(`
       SELECT 
         e.id,
         e.expense_name,
@@ -27,11 +27,12 @@ async function processReminders() {
         e.due_date,
         e.reminder_date,
         e.recurring,
+        e.user_id,
         u.name as user_name,
         u.email as user_email
       FROM expenses e
       JOIN users u ON e.user_id = u.id
-      WHERE e.reminder_date <= ? AND e.email_sent = 0
+      WHERE e.reminder_date <= $1 AND e.email_sent = 0
       ORDER BY e.due_date ASC
     `, [today]);
 
@@ -57,12 +58,12 @@ async function processReminders() {
 
         if (result.success) {
           // Mark as sent
-          run('UPDATE expenses SET email_sent = 1 WHERE id = ?', [reminder.id]);
+          await execute('UPDATE expenses SET email_sent = 1 WHERE id = $1', [reminder.id]);
           console.log(`   ✅ Reminder sent for: ${reminder.expense_name} → ${reminder.user_email}`);
 
           // Handle recurring expenses
           if (reminder.recurring === 'yes') {
-            createNextRecurringExpense(reminder);
+            await createNextRecurringExpense(reminder);
           }
         } else {
           console.log(`   ⚠️  Failed to send reminder for: ${reminder.expense_name}`);
@@ -79,7 +80,7 @@ async function processReminders() {
 /**
  * Create next month's expense for recurring expenses
  */
-function createNextRecurringExpense(expense) {
+async function createNextRecurringExpense(expense) {
   try {
     // Calculate next month's dates
     const currentDueDate = new Date(expense.due_date);
@@ -92,14 +93,11 @@ function createNextRecurringExpense(expense) {
     const nextReminderDate = new Date(currentReminderDate);
     nextReminderDate.setMonth(nextReminderDate.getMonth() + 1);
 
-    // Get user_id from original expense
-    const originalExpense = get('SELECT user_id FROM expenses WHERE id = ?', [expense.id]);
-
-    // Create new expense
-    run(
-      'INSERT INTO expenses (user_id, expense_name, amount, category, due_date, reminder_date, recurring, email_sent) VALUES (?, ?, ?, ?, ?, ?, ?, 0)',
+    // Create new expense (user_id is already in the expense object from JOIN)
+    await execute(
+      'INSERT INTO expenses (user_id, expense_name, amount, category, due_date, reminder_date, recurring, email_sent) VALUES ($1, $2, $3, $4, $5, $6, $7, 0)',
       [
-        originalExpense.user_id,
+        expense.user_id,
         expense.expense_name,
         expense.amount,
         expense.category,

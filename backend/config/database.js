@@ -1,138 +1,102 @@
 /**
  * Database Configuration
- * Uses sql.js (pure JavaScript SQLite) - no native compilation required
+ * Uses PostgreSQL via Supabase for persistent storage
  */
 
-const initSqlJs = require('sql.js');
-const fs = require('fs');
-const path = require('path');
+const { Pool } = require('pg');
 
-// Database file path - use /tmp on Render (writable), local folder in development
-// Note: /tmp is not persistent on Render free tier - data resets on restart
-const dbDir = process.env.NODE_ENV === 'production' 
-  ? '/tmp' 
-  : path.join(__dirname, '..');
-const dbPath = path.join(dbDir, 'expense_reminder.db');
-
-let db = null;
+// Create connection pool
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+});
 
 /**
- * Initialize database
+ * Initialize database - create tables if they don't exist
  */
 async function initializeDatabase() {
+  const client = await pool.connect();
+  
   try {
-    const SQL = await initSqlJs();
-    
-    // Load existing database or create new one
-    if (fs.existsSync(dbPath)) {
-      const fileBuffer = fs.readFileSync(dbPath);
-      db = new SQL.Database(fileBuffer);
-      console.log('✅ Database loaded from file');
-    } else {
-      db = new SQL.Database();
-      console.log('✅ New database created');
-    }
-
-    // Create tables
-    db.run(`
+    // Create users table
+    await client.query(`
       CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        email TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
-    db.run(`
+    // Create expenses table
+    await client.query(`
       CREATE TABLE IF NOT EXISTS expenses (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        expense_name TEXT NOT NULL,
-        amount REAL NOT NULL,
-        category TEXT DEFAULT 'Other',
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        expense_name VARCHAR(255) NOT NULL,
+        amount DECIMAL(10,2) NOT NULL,
+        category VARCHAR(50) DEFAULT 'Other',
         due_date DATE NOT NULL,
         reminder_date DATE NOT NULL,
-        recurring TEXT DEFAULT 'no' CHECK(recurring IN ('yes', 'no')),
+        recurring VARCHAR(10) DEFAULT 'no',
         email_sent INTEGER DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
     // Create indexes
-    db.run(`CREATE INDEX IF NOT EXISTS idx_expenses_user_id ON expenses(user_id)`);
-    db.run(`CREATE INDEX IF NOT EXISTS idx_expenses_reminder_date ON expenses(reminder_date)`);
-    db.run(`CREATE INDEX IF NOT EXISTS idx_expenses_due_date ON expenses(due_date)`);
-
-    // Save to file
-    saveDatabase();
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_expenses_user_id ON expenses(user_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_expenses_reminder_date ON expenses(reminder_date)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_expenses_due_date ON expenses(due_date)`);
 
     console.log('✅ Database initialized successfully');
-    return db;
   } catch (error) {
     console.error('Database initialization error:', error);
     throw error;
+  } finally {
+    client.release();
   }
 }
 
 /**
- * Save database to file
+ * Execute a query and return all results
  */
-function saveDatabase() {
-  if (db) {
-    const data = db.export();
-    const buffer = Buffer.from(data);
-    fs.writeFileSync(dbPath, buffer);
-  }
+async function query(sql, params = []) {
+  const result = await pool.query(sql, params);
+  return result.rows;
 }
 
 /**
- * Get database instance
+ * Execute a query and return first result
  */
-function getDb() {
-  return db;
+async function queryOne(sql, params = []) {
+  const result = await pool.query(sql, params);
+  return result.rows[0] || null;
 }
 
 /**
- * Helper: Execute a query and return all results
+ * Execute an INSERT/UPDATE/DELETE query and return result
  */
-function all(sql, params = []) {
-  const stmt = db.prepare(sql);
-  stmt.bind(params);
-  const results = [];
-  while (stmt.step()) {
-    results.push(stmt.getAsObject());
-  }
-  stmt.free();
-  return results;
-}
-
-/**
- * Helper: Execute a query and return first result
- */
-function get(sql, params = []) {
-  const results = all(sql, params);
-  return results[0] || null;
-}
-
-/**
- * Helper: Execute a query (INSERT, UPDATE, DELETE)
- */
-function run(sql, params = []) {
-  db.run(sql, params);
-  saveDatabase();
+async function execute(sql, params = []) {
+  const result = await pool.query(sql, params);
   return {
-    lastInsertRowid: db.exec("SELECT last_insert_rowid()")[0]?.values[0][0] || 0,
-    changes: db.getRowsModified()
+    rowCount: result.rowCount,
+    rows: result.rows
   };
+}
+
+/**
+ * Get the pool for direct access if needed
+ */
+function getPool() {
+  return pool;
 }
 
 module.exports = {
   initializeDatabase,
-  getDb,
-  saveDatabase,
-  all,
-  get,
-  run
+  query,
+  queryOne,
+  execute,
+  getPool
 };

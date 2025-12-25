@@ -6,7 +6,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { body, validationResult } = require('express-validator');
-const { get, run } = require('../config/database');
+const { query, queryOne, execute } = require('../config/database');
 const { authenticate, generateToken } = require('../middleware/auth');
 
 const router = express.Router();
@@ -44,7 +44,7 @@ router.post('/signup', [
     const { name, email, password } = req.body;
 
     // Check if user already exists
-    const existingUser = get('SELECT id FROM users WHERE email = ?', [email]);
+    const existingUser = await queryOne('SELECT id FROM users WHERE email = $1', [email]);
     if (existingUser) {
       return res.status(400).json({
         success: false,
@@ -57,20 +57,22 @@ router.post('/signup', [
     const passwordHash = await bcrypt.hash(password, salt);
 
     // Insert user into database
-    const result = run(
-      'INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)',
+    const result = await execute(
+      'INSERT INTO users (name, email, password_hash) VALUES ($1, $2, $3) RETURNING id',
       [name, email, passwordHash]
     );
 
+    const newUserId = result.rows[0].id;
+
     // Generate token
-    const token = generateToken(result.lastInsertRowid);
+    const token = generateToken(newUserId);
 
     res.status(201).json({
       success: true,
       message: 'Account created successfully',
       data: {
         user: {
-          id: result.lastInsertRowid,
+          id: newUserId,
           name,
           email
         },
@@ -116,7 +118,7 @@ router.post('/login', [
     const { email, password } = req.body;
 
     // Find user
-    const user = get('SELECT * FROM users WHERE email = ?', [email]);
+    const user = await queryOne('SELECT * FROM users WHERE email = $1', [email]);
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -181,7 +183,7 @@ router.put('/update-profile', authenticate, [
     .optional()
     .trim()
     .isLength({ min: 2, max: 50 }).withMessage('Name must be 2-50 characters')
-], (req, res) => {
+], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -195,10 +197,10 @@ router.put('/update-profile', authenticate, [
     const { name } = req.body;
     
     if (name) {
-      run('UPDATE users SET name = ? WHERE id = ?', [name, req.user.id]);
+      await execute('UPDATE users SET name = $1 WHERE id = $2', [name, req.user.id]);
     }
 
-    const updatedUser = get('SELECT id, name, email FROM users WHERE id = ?', [req.user.id]);
+    const updatedUser = await queryOne('SELECT id, name, email FROM users WHERE id = $1', [req.user.id]);
 
     res.json({
       success: true,
