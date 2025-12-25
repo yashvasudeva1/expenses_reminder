@@ -38,7 +38,6 @@ services:
   - type: web
     name: expense-reminder-frontend
     env: static
-    plan: free
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: frontend/dist
     routes:
