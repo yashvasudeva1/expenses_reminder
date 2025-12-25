@@ -6,9 +6,19 @@
 import axios from 'axios'
 
 // API base URL - use environment variable in production, proxy in development
-const API_BASE_URL = import.meta.env.VITE_API_URL 
-  ? `https://${import.meta.env.VITE_API_URL}/api`
-  : '/api'
+const getApiBaseUrl = () => {
+  const envUrl = import.meta.env.VITE_API_URL
+  if (!envUrl) return '/api'
+  
+  // If URL already has protocol, use as-is
+  if (envUrl.startsWith('http://') || envUrl.startsWith('https://')) {
+    return `${envUrl}/api`
+  }
+  // Otherwise add https://
+  return `https://${envUrl}/api`
+}
+
+const API_BASE_URL = getApiBaseUrl()
 
 // Create axios instance
 const api = axios.create({
