@@ -19,7 +19,15 @@ function initializeTransporter() {
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS
-    }
+    },
+    // Add timeouts to prevent hanging
+    connectionTimeout: 10000, // 10 seconds
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
+    // Use pooling for better reliability
+    pool: true,
+    maxConnections: 1,
+    maxMessages: 10
   });
 
   // Verify connection
