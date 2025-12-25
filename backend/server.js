@@ -27,28 +27,20 @@ const PORT = process.env.PORT || 3000;
 // Security Middleware
 // ===========================================
 
-// Helmet - Set security headers
-app.use(helmet());
-
-// CORS - Allow frontend access
-const allowedOrigins = [
-  'http://localhost:5173',
-  process.env.FRONTEND_URL,
-  process.env.FRONTEND_URL ? `https://${process.env.FRONTEND_URL}` : null
-].filter(Boolean);
-
+// CORS - Allow frontend access (MUST be before Helmet)
 app.use(cors({
-  origin: function(origin, callback) {
-    // Allow requests with no origin (mobile apps, curl, etc)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.some(allowed => origin.includes(allowed.replace('https://', '').replace('http://', '')))) {
-      return callback(null, true);
-    }
-    return callback(null, true); // Allow all in production for now
-  },
+  origin: true, // Allow all origins in production
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+// Handle preflight requests explicitly
+app.options('*', cors());
+
+// Helmet - Set security headers (after CORS)
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 
 // Rate limiting - Prevent brute force attacks
