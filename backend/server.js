@@ -110,6 +110,20 @@ app.post('/api/test-email', async (req, res) => {
   });
 });
 
+// Check email config status (for debugging)
+app.get('/api/email-status', async (req, res) => {
+  const hasSmtpHost = !!process.env.SMTP_HOST;
+  const hasSmtpUser = !!process.env.SMTP_USER;
+  const hasSmtpPass = !!process.env.SMTP_PASS;
+  res.json({
+    configured: hasSmtpHost && hasSmtpUser && hasSmtpPass,
+    smtpHost: hasSmtpHost ? process.env.SMTP_HOST : 'NOT SET',
+    smtpUser: hasSmtpUser ? process.env.SMTP_USER : 'NOT SET',
+    smtpPass: hasSmtpPass ? 'SET (hidden)' : 'NOT SET',
+    smtpPort: process.env.SMTP_PORT || '587 (default)'
+  });
+});
+
 // Manual trigger for reminders (useful for testing)
 app.post('/api/trigger-reminders', async (req, res) => {
   try {
