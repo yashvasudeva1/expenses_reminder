@@ -124,6 +124,24 @@ app.get('/api/email-status', async (req, res) => {
   });
 });
 
+// Test send a single email (for debugging)
+app.post('/api/test-send', async (req, res) => {
+  try {
+    const { sendReminderEmail } = require('./services/emailService');
+    const result = await sendReminderEmail({
+      to: req.body.email || 'vasudevyash@gmail.com',
+      userName: 'Test User',
+      expenseName: 'Test Expense',
+      amount: 1000,
+      dueDate: new Date().toISOString().split('T')[0],
+      category: 'Test'
+    });
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Manual trigger for reminders (useful for testing)
 app.post('/api/trigger-reminders', async (req, res) => {
   try {
