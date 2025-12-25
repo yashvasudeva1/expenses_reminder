@@ -32,20 +32,12 @@ services:
       - key: EMAIL_FROM_ADDRESS
         sync: false
       - key: FRONTEND_URL
-        fromService:
-          name: expense-reminder-frontend
-          type: web
-          property: host
-    disk:
-      name: data
-      mountPath: /var/data
-      sizeGB: 1
+        sync: false
 
   # Frontend Static Site
   - type: web
     name: expense-reminder-frontend
     env: static
-    region: oregon
     plan: free
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: frontend/dist
