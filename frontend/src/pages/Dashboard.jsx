@@ -21,7 +21,8 @@ import {
   PlusCircle,
   Receipt,
   PieChart,
-  ArrowRight
+  ArrowRight,
+  CheckCircle
 } from 'lucide-react'
 
 export default function Dashboard() {
@@ -62,6 +63,16 @@ export default function Dashboard() {
     } finally {
       setDeleting(false)
       setDeleteId(null)
+    }
+  }
+
+  const handleMarkPaid = async (id) => {
+    try {
+      const response = await expensesAPI.markPaid(id)
+      toast.success(response.data.data.expense.paid === 1 ? 'Marked as paid!' : 'Marked as unpaid')
+      loadSummary()
+    } catch (error) {
+      toast.error('Failed to update expense')
     }
   }
 
@@ -151,6 +162,7 @@ export default function Dashboard() {
                   key={expense.id}
                   expense={expense}
                   onDelete={(id) => setDeleteId(id)}
+                  onMarkPaid={handleMarkPaid}
                 />
               ))}
             </div>

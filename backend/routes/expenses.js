@@ -421,4 +421,86 @@ router.delete('/:id', [
   }
 });
 
+/**
+ * @route   PATCH /api/expenses/:id/paid
+ * @desc    Mark expense as paid/unpaid
+ * @access  Private
+ */
+router.patch('/:id/paid', [
+  param('id').isInt().withMessage('Invalid expense ID')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    // Check if expense exists and belongs to user
+    const expense = await queryOne(
+      'SELECT * FROM expenses WHERE id = $1 AND user_id = $2',
+      [req.params.id, req.user.id]
+    );
+
+    if (!expense) {
+      return res.status(404).json({
+        success: false,
+        message: 'Expense not found'
+      });
+    }
+
+    // Toggle paid status
+    const newPaidStatus = expense.paid === 1 ? 0 : 1;
+    const paidAt = newPaidStatus === 1 ? new Date().toISOString() : null;
+
+    const updatedExpense = await queryOne(
+      'UPDATE expenses SET paid = $1, paid_at = $2 WHERE id = $3 AND user_id = $4 RETURNING *',
+      [newPaidStatus, paidAt, req.params.id, req.user.id]
+    );
+
+    res.json({
+      success: true,
+      message: newPaidStatus === 1 ? 'Expense marked as paid' : 'Expense marked as unpaid',
+      data: { expense: updatedExpense }
+    });
+  } catch (error) {
+    console.error('Mark paid error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error updating expense'
+    });
+  }
+});
+
+/**
+ * @route   GET /api/expenses/paid
+ * @desc    Get all paid expenses
+ * @access  Private
+ */
+router.get('/paid/list', async (req, res) => {
+  try {
+    const expenses = await query(
+      'SELECT * FROM expenses WHERE user_id = $1 AND paid = 1 ORDER BY paid_at DESC',
+      [req.user.id]
+    );
+
+    res.json({
+      success: true,
+      data: {
+        expenses,
+        count: expenses.length
+      }
+    });
+  } catch (error) {
+    console.error('Get paid expenses error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching paid expenses'
+    });
+  }
+});
+
 module.exports = router;

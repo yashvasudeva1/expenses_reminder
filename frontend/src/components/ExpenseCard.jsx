@@ -11,7 +11,8 @@ import {
   Edit,
   Trash2,
   RefreshCw,
-  DollarSign
+  Check,
+  Circle
 } from 'lucide-react'
 
 // Category colors
@@ -26,7 +27,7 @@ const categoryColors = {
   Other: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-400'
 }
 
-export default function ExpenseCard({ expense, onDelete }) {
+export default function ExpenseCard({ expense, onDelete, onMarkPaid, showPaidStatus = true }) {
   const navigate = useNavigate()
 
   // Format amount as currency
@@ -39,8 +40,14 @@ export default function ExpenseCard({ expense, onDelete }) {
   const dueDate = new Date(expense.due_date)
   const reminderDate = new Date(expense.reminder_date)
 
+  // Check if paid
+  const isPaid = expense.paid === 1 || expense.paid === true
+
   // Get due date status
   const getDueDateStatus = () => {
+    if (isPaid) {
+      return { label: 'Paid', className: 'text-green-500 dark:text-green-400 font-semibold' }
+    }
     if (isPast(dueDate) && !isToday(dueDate)) {
       return { label: 'Overdue', className: 'text-red-500 dark:text-red-400 font-semibold' }
     }
@@ -60,32 +67,55 @@ export default function ExpenseCard({ expense, onDelete }) {
   const dueDateStatus = getDueDateStatus()
 
   return (
-    <div className="card p-5 card-hover animate-fade-in">
+    <div className={`card p-5 card-hover animate-fade-in ${isPaid ? 'opacity-75 bg-green-50 dark:bg-green-900/10' : ''}`}>
       <div className="flex items-start justify-between gap-4">
-        {/* Left: Main Info */}
-        <div className="flex-1 min-w-0">
-          {/* Category Badge & Recurring */}
-          <div className="flex items-center gap-2 mb-2">
-            <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${categoryColors[expense.category] || categoryColors.Other}`}>
-              {expense.category}
-            </span>
-            {expense.recurring === 'yes' && (
-              <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
-                <RefreshCw className="w-3 h-3" />
-                Recurring
+        {/* Left: Paid Checkbox & Main Info */}
+        <div className="flex items-start gap-3 flex-1 min-w-0">
+          {/* Paid Checkbox */}
+          {showPaidStatus && onMarkPaid && (
+            <button
+              onClick={() => onMarkPaid(expense.id)}
+              className={`mt-1 flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+                isPaid 
+                  ? 'bg-green-500 border-green-500 text-white' 
+                  : 'border-gray-300 dark:border-gray-600 hover:border-green-500 dark:hover:border-green-500'
+              }`}
+              title={isPaid ? 'Mark as unpaid' : 'Mark as paid'}
+            >
+              {isPaid && <Check className="w-4 h-4" />}
+            </button>
+          )}
+
+          <div className="flex-1 min-w-0">
+            {/* Category Badge & Recurring */}
+            <div className="flex items-center gap-2 mb-2">
+              <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${categoryColors[expense.category] || categoryColors.Other}`}>
+                {expense.category}
               </span>
-            )}
+              {expense.recurring === 'yes' && (
+                <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                  <RefreshCw className="w-3 h-3" />
+                  Recurring
+                </span>
+              )}
+              {isPaid && (
+                <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 font-medium">
+                  <Check className="w-3 h-3" />
+                  Paid
+                </span>
+              )}
+            </div>
+
+            {/* Expense Name */}
+            <h3 className={`font-semibold text-lg text-gray-900 dark:text-white truncate mb-1 ${isPaid ? 'line-through opacity-75' : ''}`}>
+              {expense.expense_name}
+            </h3>
+
+            {/* Amount */}
+            <p className={`text-2xl font-bold ${isPaid ? 'text-green-600 dark:text-green-400' : 'gradient-text'}`}>
+              {formattedAmount}
+            </p>
           </div>
-
-          {/* Expense Name */}
-          <h3 className="font-semibold text-lg text-gray-900 dark:text-white truncate mb-1">
-            {expense.expense_name}
-          </h3>
-
-          {/* Amount */}
-          <p className="text-2xl font-bold gradient-text">
-            {formattedAmount}
-          </p>
         </div>
 
         {/* Right: Actions */}

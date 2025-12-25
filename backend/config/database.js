@@ -41,14 +41,30 @@ async function initializeDatabase() {
         reminder_date DATE NOT NULL,
         recurring VARCHAR(10) DEFAULT 'no',
         email_sent INTEGER DEFAULT 0,
+        paid INTEGER DEFAULT 0,
+        paid_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
+    `);
+
+    // Add paid column if it doesn't exist (for existing tables)
+    await client.query(`
+      DO $$ 
+      BEGIN 
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='expenses' AND column_name='paid') THEN
+          ALTER TABLE expenses ADD COLUMN paid INTEGER DEFAULT 0;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='expenses' AND column_name='paid_at') THEN
+          ALTER TABLE expenses ADD COLUMN paid_at TIMESTAMP;
+        END IF;
+      END $$;
     `);
 
     // Create indexes
     await client.query(`CREATE INDEX IF NOT EXISTS idx_expenses_user_id ON expenses(user_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_expenses_reminder_date ON expenses(reminder_date)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_expenses_due_date ON expenses(due_date)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_expenses_paid ON expenses(paid)`);
 
     console.log('✅ Database initialized successfully');
   } catch (error) {

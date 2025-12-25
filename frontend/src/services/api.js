@@ -78,7 +78,9 @@ export const expensesAPI = {
   update: (id, data) => api.put(`/expenses/${id}`, data),
   delete: (id) => api.delete(`/expenses/${id}`),
   getCategories: () => api.get('/expenses/categories'),
-  getMonthlySummary: (params) => api.get('/expenses/summary/monthly', { params })
+  getMonthlySummary: (params) => api.get('/expenses/summary/monthly', { params }),
+  markPaid: (id) => api.patch(`/expenses/${id}/paid`),
+  getPaid: () => api.get('/expenses/paid/list')
 }
 
 export default api
